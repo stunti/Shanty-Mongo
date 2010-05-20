@@ -125,8 +125,38 @@ class Shanty_Mongo_Iterator_Cursor implements OuterIterator
 		return $this->getInnerIterator()->valid();
 	}
 	
+
+    public function count($bool = false)
+    {
+        return $this->getInnerIterator()->count($bool);
+    }
+
+    public function info()
+    {
+        return $this->getInnerIterator()->info();
+    }
+
+    public function skip($num)
+    {
+        return $this->getInnerIterator()->skip((int) $num);
+    }
+
 	public function __call($method, $arguments)
 	{
-		return $this->getInnerIterator()->$method($arguments);
+		$res = $this->getInnerIterator()->$method($arguments);
+        if ($res instanceof MongoCursor) {
+            //$this->_cursor = $res;
+            return $this;
+        } elseif (is_array($res)) {
+
+            $config = array();
+            $config['hasKey'] = true;
+            $config['collection'] = $this->getCollection();
+            $documentClass = $this->getDocumentClass();
+
+            return new $documentClass($res, $config);
+        } else {
+            return $res;
+        }
 	}
 }

@@ -145,7 +145,7 @@ class Shanty_Mongo_DocumentSet extends Shanty_Mongo_Document
 		
 		if ($new) {
 			$keys = $this->getPropertyKeys();
-			$index = max($keys)+1;
+			$index = empty($keys) ? 0 : max($keys)+1;
 			$this->_data[$index] = $document;
 		}
 		else $this->_data[$index] = $document;
