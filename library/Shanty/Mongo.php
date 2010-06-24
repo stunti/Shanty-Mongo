@@ -17,7 +17,7 @@ class Shanty_Mongo
 	protected static $_connectionGroups = array();
 	protected static $_requirements = array();
 	protected static $_requirementCreators = array();
-	protected static $_validOperations = array('$set', '$unset', '$push', '$pushAll', '$pull', '$pullAll', '$inc');
+	protected static $_validOperations = array('$set', '$unset', '$push', '$pushAll', '$pull', '$pullAll', '$addToSet', '$pop', '$inc');
 	
 	/**
 	 * Initialise Shanty_Mongo. In particular all the requirements.
@@ -28,32 +28,36 @@ class Shanty_Mongo
 		if (!empty(static::$_requirements)) return;
 		
 		// Custom validators
-		static::addRequirement('Validator:Array', new Shanty_Mongo_Validate_Array());
-		static::addRequirement('Validator:MongoId', new Shanty_Mongo_Validate_Class('MongoId'));
-		static::addRequirement('Document', new Shanty_Mongo_Validate_Class('Shanty_Mongo_Document'));
-		static::addRequirement('DocumentSet', new Shanty_Mongo_Validate_Class('Shanty_Mongo_DocumentSet'));
+		static::storeRequirement('Validator:Array', new Shanty_Mongo_Validate_Array());
+		static::storeRequirement('Validator:MongoId', new Shanty_Mongo_Validate_Class('MongoId'));
+		static::storeRequirement('Document', new Shanty_Mongo_Validate_Class('Shanty_Mongo_Document'));
+		static::storeRequirement('DocumentSet', new Shanty_Mongo_Validate_Class('Shanty_Mongo_DocumentSet'));
 		
 		// Stubs
-		static::addRequirement('Required', new Shanty_Mongo_Validate_StubTrue());
-		static::addRequirement('AsReference', new Shanty_Mongo_Validate_StubTrue());
+		static::storeRequirement('Required', new Shanty_Mongo_Validate_StubTrue());
+		static::storeRequirement('AsReference', new Shanty_Mongo_Validate_StubTrue());
 		
 		// Requirement creator for validators
-		static::addRequirementCreator('/^Validator:([A-Za-z]+[\w\-:]*)$/', function($data, $options = null) {
+		static::storeRequirementCreator('/^Validator:([A-Za-z]+[\w\-:]*)$/', function($data, $options = null) {
 			$instanceClass = 'Zend_Validate_'.$data[1];
 			if (!class_exists($instanceClass)) return null;
 			
-			$validator = new $instanceClass($options);
+			if (!is_null($options)) $validator = new $instanceClass($options);
+			else $validator = new $instanceClass();
+			
 			if (!($validator instanceof Zend_Validate_Interface)) return null;
 			
 			return $validator;
 		});
 		
 		// Requirement creator for filters
-		static::addRequirementCreator('/^Filter:([A-Za-z]+[\w\-:]*)$/', function($data, $options = null) {
+		static::storeRequirementCreator('/^Filter:([A-Za-z]+[\w\-:]*)$/', function($data, $options = null) {
 			$instanceClass = 'Zend_Filter_'.$data[1];
 			if (!class_exists($instanceClass)) return null;
 			
-			$validator = new $instanceClass($options);
+			if (!is_null($options)) $validator = new $instanceClass($options);
+			else $validator = new $instanceClass();
+			
 			if (!($validator instanceof Zend_Filter_Interface)) return null;
 			
 			return $validator;
@@ -66,8 +70,8 @@ class Shanty_Mongo
 			return new Shanty_Mongo_Validate_Class($data[1]);
 		};
 		
-		static::addRequirementCreator('/^Document:([A-Za-z]+[\w\-]*)$/', $classValidator);
-		static::addRequirementCreator('/^DocumentSet:([A-Za-z]+[\w\-]*)$/', $classValidator);
+		static::storeRequirementCreator('/^Document:([A-Za-z]+[\w\-]*)$/', $classValidator);
+		static::storeRequirementCreator('/^DocumentSet:([A-Za-z]+[\w\-]*)$/', $classValidator);
 	}
 	
 	/**
@@ -99,7 +103,7 @@ class Shanty_Mongo
 	 * @param $name String Name of requirement
 	 * @return mixed
 	 **/
-	public static function getRequirement($name, $options = null)
+	public static function retrieveRequirement($name, $options = null)
 	{
 		// Requirement is already initialised return it
 		if (array_key_exists($name, static::$_requirements)) {
@@ -118,7 +122,7 @@ class Shanty_Mongo
 		
 		// Requirement found. Store it for later use
 		if (!is_null($options)) {
-			static::addRequirement($name, $requirement);
+			static::storeRequirement($name, $requirement);
 		}
 		
 		return $requirement;
@@ -130,7 +134,7 @@ class Shanty_Mongo
 	 * @param $name String Name of requirement
 	 * @param $requirement mixed
 	 **/
-	public static function addRequirement($name, $requirement)
+	public static function storeRequirement($name, $requirement)
 	{
 		// Ensure $name is a string
 		$name = (string) $name;
@@ -144,7 +148,7 @@ class Shanty_Mongo
 	 * @param String Regex to match this requirement producer
 	 * @param Closure Function to create requirement
 	 **/
-	public static function addRequirementCreator($regex, Closure $function)
+	public static function storeRequirementCreator($regex, Closure $function)
 	{
 		static::$_requirementCreators[$regex] = $function;
 	}
@@ -155,7 +159,7 @@ class Shanty_Mongo
 	 * @param $name String Name of requirement
 	 * @return mixed
 	 **/
-	protected static function createRequirement($name, $options = null)
+	public static function createRequirement($name, $options = null)
 	{
 		// Match requirement name against regex's
 		foreach (static::$_requirementCreators as $regex => $function) {
@@ -168,6 +172,23 @@ class Shanty_Mongo
 		}
 		
 		return null;
+	}
+	
+
+	/**
+	 * Remove all requirements
+	 */
+	public static function removeRequirements()
+	{
+		static::$_requirements = array();
+	}
+	
+	/**
+	 * Remove all requirement creators
+	 */
+	public static function removeRequirementCreators()
+	{
+		static::$_requirementCreators = array();
 	}
 	
 	/**
@@ -233,6 +254,7 @@ class Shanty_Mongo
 	{
 		static::$_connectionGroups = array();
 	}
+	
 	
 	/**
 	 * Add a connection to a master server
@@ -308,6 +330,7 @@ class Shanty_Mongo
 	public static function makeClean()
 	{
 		static::removeConnectionGroups();
-		
+		static::removeRequirements();
+		static::removeRequirementCreators();
 	}
 }

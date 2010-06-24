@@ -29,16 +29,6 @@ class Shanty_Mongo_Iterator_Cursor implements OuterIterator
 	}
 	
 	/**
-	 * Get the collection name
-	 * 
-	 * @return string
-	 */
-	public function getCollection()
-	{
-		return $this->_config['collection'];
-	}
-	
-	/**
 	 * Get the document class
 	 * 
 	 * @return string
@@ -77,8 +67,11 @@ class Shanty_Mongo_Iterator_Cursor implements OuterIterator
 	public function makeDocumentSet()
 	{
 		$config = array();
+		$config['new'] = false;
 		$config['hasId'] = false;
-		$config['collection'] = $this->getCollection();
+		$config['connectionGroup'] = $this->_config['connectionGroup'];
+		$config['db'] = $this->_config['db'];
+		$config['collection'] = $this->_config['collection'];
 		$config['requirementModifiers'] = array(
 			Shanty_Mongo_DocumentSet::DYNAMIC_INDEX => array("Document:".$this->getDocumentClass())
 		);
@@ -97,12 +90,21 @@ class Shanty_Mongo_Iterator_Cursor implements OuterIterator
 		$data = $this->getInnerIterator()->current();
 		
 		$config = array();
+		$config['new'] = false;
 		$config['hasKey'] = true;
-		$config['collection'] = $this->getCollection();
+		$config['connectionGroup'] = $this->_config['connectionGroup'];
+		$config['db'] = $this->_config['db'];
+		$config['collection'] = $this->_config['collection'];
 		
 		$documentClass = $this->getDocumentClass();
 		
 		return new $documentClass($data, $config);
+	}
+	
+	public function getNext()
+	{
+		$this->next();
+		return $this->current();
 	}
 	
 	public function key()
@@ -125,38 +127,26 @@ class Shanty_Mongo_Iterator_Cursor implements OuterIterator
 		return $this->getInnerIterator()->valid();
 	}
 	
-
-    public function count($bool = false)
-    {
-        return $this->getInnerIterator()->count($bool);
-    }
-
-    public function info()
-    {
-        return $this->getInnerIterator()->info();
-    }
-
-    public function skip($num)
-    {
-        return $this->getInnerIterator()->skip((int) $num);
-    }
-
+	public function count($all = false)
+	{
+		return $this->getInnerIterator()->count($all);
+	}
+	
+	public function info()
+	{
+		return $this->getInnerIterator()->info();
+	}
+	
 	public function __call($method, $arguments)
 	{
-		$res = $this->getInnerIterator()->$method($arguments);
-        if ($res instanceof MongoCursor) {
-            //$this->_cursor = $res;
-            return $this;
-        } elseif (is_array($res)) {
-
-            $config = array();
-            $config['hasKey'] = true;
-            $config['collection'] = $this->getCollection();
-            $documentClass = $this->getDocumentClass();
-
-            return new $documentClass($res, $config);
-        } else {
-            return $res;
-        }
+		// Forward the call to the MongoCursor
+		$res = call_user_func_array(array($this->getInnerIterator(), $method), $arguments);
+		
+		// Allow chaining
+		if ($res instanceof MongoCursor) {
+			return $this;
+		}
+		
+		return $res;
 	}
 }
